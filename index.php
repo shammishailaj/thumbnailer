@@ -36,7 +36,7 @@ try {
 
 // all exceptions are handled by displaying an 'image not found' png
 catch (Exception $e) {
-    dd($e);
+    //dd($e);
     header('Content-type: image/jpeg');
     echo file_get_contents(__DIR__ . '/img-not-found.png');
     exit(0);
