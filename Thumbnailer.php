@@ -274,7 +274,7 @@ class Thumbnailer {
      */
     public function getSupportedFileExtensions()
     {
-        return array_merge(Thumbnail::$imageFormatsSupported, Thumbnail::$nonImageFormatsSupported);
+        return Thumbnail::getFormatsSupported();
     }
 
     /**
