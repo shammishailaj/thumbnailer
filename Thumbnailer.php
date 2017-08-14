@@ -1,7 +1,9 @@
 <?php
 use Directus\Bootstrap;
 use Directus\Util\ArrayUtils;
+use Directus\Filesystem\Thumbnail;
 use Intervention\Image\ImageManagerStatic as Image;
+use Exception;
 
 class Thumbnailer {
 
@@ -44,23 +46,23 @@ class Thumbnailer {
             $this->app = Bootstrap::get('app');
             $this->configFilePath = ArrayUtils::get($options, 'configFilePath', __DIR__ . '/config.json');
             $this->thumbnailParams = $this->extractThumbnailParams(ArrayUtils::get($options, 'thumbnailUrlPath'));
-                        
-            // check if the original file exists in storage
-            if (! $this->app->files->exists($this->fileName)) {
-                throw new Exception($this->fileName . ' does not exist.'); // original file doesn't exist
-            }
-            
-            // check if file extension is acceptable
-            if (! in_array(strtolower($this->fileExt), $this->getAcceptableFileExtensions())) {
-                throw new Exception('Invalid file extension');
-            }
-            
-            // check if dimensions are acceptable
-            if (! $this->isAcceptableThumbnailDimension($this->width, $this->height)) {
+
+            // check if dimensions are supported
+            if (! $this->isSupportedThumbnailDimension($this->width, $this->height)) {
                 throw new Exception('Invalid dimensions.');
-            }            
+            }
             
-            $this->thumbnailDir = ArrayUtils::get($this->getConfig(), 'thumbnailDirectory',__DIR__) . '/' . $this->width . '/' . $this->height . ($this->action ? '/' . $action : '') . ($this->quality ? '/' . $this->quality : '');
+            // check if action is supported
+            if ( $this->action && ! $this->isSupportedAction($this->action)) {
+                throw new Exception('Invalid action.');
+            }
+            
+            // check if quality is supported
+            if ( $this->quality && ! $this->isSupportedQualityTag($this->quality)) {
+                throw new Exception('Invalid quality.');
+            }           
+            
+            $this->thumbnailDir = ArrayUtils::get($this->getConfig(), 'thumbnailDirectory',__DIR__) . '/' . $this->width . '/' . $this->height . ($this->action ? '/' . $this->action : '') . ($this->quality ? '/' . $this->quality : '');
         }
         
         catch (Exception $e) {
@@ -84,8 +86,9 @@ class Thumbnailer {
     }
 
     /**
-     * Crop image and save as thumbnail
-     * http://image.intervention.io/api/crop
+     * Create thumbnail from image and `crop`
+     * http://image.intervention.io/api/fit
+     * https://css-tricks.com/almanac/properties/o/object-fit/
      *
      * @throws Exception
      * @return string
@@ -93,16 +96,19 @@ class Thumbnailer {
     public function crop()
     {        
         try {
+            // action options
+            $options = $this->getSupportedActionOptions($this->action);
+            
             // open file a image resource
             $img = Image::make(ArrayUtils::get($this->getConfig(), 'root') . '/' . $this->fileName);
             
             // create directory if needed
             if (! file_exists($this->thumbnailDir)) {
                 mkdir($this->thumbnailDir, 0755, true);
-            }
-            
-            // crop image
-            $img->crop($this->width, $this->height)->save($this->thumbnailDir . '/' . $this->fileName, ($this->quality ? $this->translateQuality($this->quality) : null));
+            }        
+
+            // resize/crop image
+            $img->fit($this->width, $this->height, function($constraint){}, ArrayUtils::get($options, 'position', 'center'))->save($this->thumbnailDir . '/' . $this->fileName, ($this->quality ? $this->translateQuality($this->quality) : null));
             
             return $this->thumbnailDir . '/' . $this->fileName;
         }
@@ -113,15 +119,19 @@ class Thumbnailer {
     }
 
     /**
-     * Fit image and save as thumbnail
-     * http://image.intervention.io/api/fit
+     * Create thumbnail from image and `contain` 
+     * http://image.intervention.io/api/resize
+     * https://css-tricks.com/almanac/properties/o/object-fit/ 
      *
      * @throws Exception
      * @return string
      */
-    public function fit()
+    public function contain()
     {        
         try {            
+            // action options
+            $options = $this->getSupportedActionOptions($this->action);
+            
             // open file a image resource
             $img = Image::make(ArrayUtils::get($this->getConfig(), 'root') . '/' . $this->fileName);
             
@@ -130,8 +140,17 @@ class Thumbnailer {
                 mkdir($this->thumbnailDir, 0755, true);
             }
             
-            // fit image
-            $img->fit($this->width, $this->height)->save($this->thumbnailDir . '/' . $this->fileName, ($this->quality ? $this->translateQuality($this->quality) : null));
+            // crop image
+            $img->resize($this->width, $this->height, function ($constraint) {
+                $constraint->aspectRatio();
+            });
+            
+            if( ArrayUtils::get($options, 'resizeCanvas')) {
+                $img->resizeCanvas($this->width, $this->height, ArrayUtils::get($options, 'position', 'center'), ArrayUtils::get($options, 'resizeRelative', false), ArrayUtils::get($options, 'canvasBackground', [255, 255, 255, 0]));
+            }
+              
+            // save image
+            $img->save($this->thumbnailDir . '/' . $this->fileName, ($this->quality ? $this->translateQuality($this->quality) : null));
             
             return $this->thumbnailDir . '/' . $this->fileName;
         }
@@ -166,7 +185,7 @@ class Thumbnailer {
             
             // make sure filename is valid
             $info = pathinfo($fileName);
-            if (! in_array(ArrayUtils::get($info, 'extension'), $this->getAcceptableFileExtensions())) {
+            if (! in_array(ArrayUtils::get($info, 'extension'), $this->getSupportedFileExtensions())) {
                 throw new Exception('Invalid file extension.');
             }
             
@@ -234,56 +253,102 @@ class Thumbnailer {
      */
     public function translateQuality($qualityText)
     {
-        $qualityNumber = 50; // default quality
-        
-        switch ($qualityText) {
-            case 'best':
-                $qualityNumber = 100;
-                break;
-            case 'better':
-                $qualityNumber = 75;
-                break;
-            case 'good':
-                $qualityNumber = 50;
-                break;
-            case 'poor':
-                $qualityNumber = 25;
-                break;
-        }
-        
-        return $qualityNumber;
+        return ArrayUtils::get($this->getSupportedQualityTags(), $qualityText, 50);
     }
 
     /**
-     * Return acceptable image file types
+     * Check if given file extension is supported
+     *
+     * @param int $ext
+     * @return boolean
+     */
+    public function isSupportedFileExtension($ext)
+    {
+        return in_array($ext, $this->getSupportedFileExtensions());
+    }
+
+    /**
+     * Return supported image file types
      *
      * @return array
      */
-    public function getAcceptableFileExtensions()
+    public function getSupportedFileExtensions()
     {
-        return ArrayUtils::get($this->getConfig(), 'acceptableFileExtensions');
+        return array_merge(Thumbnail::$imageFormatsSupported, Thumbnail::$nonImageFormatsSupported);
     }
-    
+
     /**
-     * Check if given dimension is acceptable
-     * 
-     * @param int $width
-     * @param int $height
+     * Check if given dimension is supported
+     *
+     * @param int $width            
+     * @param int $height            
      * @return boolean
      */
-    public function isAcceptableThumbnailDimension($width, $height) 
+    public function isSupportedThumbnailDimension($width, $height)
     {
-        return in_array($width . 'x' . $height, $this->getAcceptableThumbnailDimensions());
+        return in_array($width . 'x' . $height, $this->getSupportedThumbnailDimensions());
+    }
+
+    /**
+     * Return supported thumbnail file dimesions
+     *
+     * @return array
+     */
+    public function getSupportedThumbnailDimensions()
+    {
+        return ArrayUtils::get($this->getConfig(), 'supportedThumbnailDimensions');
+    }
+
+    /**
+     * Check if given action is supported
+     *
+     * @param int $action        
+     * @return boolean
+     */
+    public function isSupportedAction($action)
+    {
+        return ArrayUtils::has($this->getSupportedActions(), $action);
+    }
+
+    /**
+     * Return supported actions
+     *
+     * @return array
+     */
+    public function getSupportedActions()
+    {
+        return ArrayUtils::get($this->getConfig(), 'supportedActions');
+    }
+
+    /**
+     * Check if given quality is supported
+     *
+     * @param int $action        
+     * @return boolean
+     */
+    public function isSupportedQualityTag($qualityTag)
+    {
+        return ArrayUtils::has($this->getSupportedQualityTags(), $qualityTag);
+    }
+
+    /**
+     * Return supported thumbnail qualities
+     *
+     * @return array
+     */
+    public function getSupportedQualityTags()
+    {
+        return ArrayUtils::get($this->getConfig(), 'supportedQualityTags');
     }
     
     /**
-     * Return acceptable thumbnail file dimesions
+     * Return supported action options as set in config
      * 
-     * @return array
+     * @param string $action
      */
-    public function getAcceptableThumbnailDimensions()
+    public function getSupportedActionOptions($action) 
     {
-        return ArrayUtils::get($this->getConfig(), 'acceptableThumbnailDimensions');
+        return ArrayUtils::get($this->getConfig(), 'supportedActions.' . $action . '.options');
     }
     
     /**

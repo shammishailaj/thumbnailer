@@ -19,14 +19,14 @@ try {
     switch ($thumbnailer->action) {
         
         // http://image.intervention.io/api/crop
-        case 'crop':
-            $imagePath = $thumbnailer->crop();
+        case 'contain':
+            $imagePath = $thumbnailer->contain();
             break;
             
         // http://image.intervention.io/api/fit
-        case 'fit':
+        case 'crop':
         default:
-            $imagePath = $thumbnailer->fit();
+            $imagePath = $thumbnailer->crop();
     }
     
     header('Content-type: image/jpeg');
@@ -36,7 +36,7 @@ try {
 
 // all exceptions are handled by displaying an 'image not found' png
 catch (Exception $e) {
-    //dd($e);
+    dd($e);
     header('Content-type: image/jpeg');
     echo file_get_contents(__DIR__ . '/img-not-found.png');
     exit(0);

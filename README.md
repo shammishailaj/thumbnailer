@@ -49,26 +49,39 @@ Constructor.
 ##### public function __get($key)
 PHP magic getter implementation to retrieve extracted thumbnail params as well as other object properties.
 >**(string) $key** - Will return either an existing object property, or a `thumbnailParams` setting, i.e - `$thumbnailer->width`   
+##### public function get()
+Return the image object as a data string ready for display.
+##### public function contain()
+Resizes the image to fill the container whilst preserving its aspect-ratio with option to pad the container with a background (see `config.json`, `supportedActions` for options).  Please also see http://image.intervention.io/api/resize and https://css-tricks.com/almanac/properties/o/object-fit/.
 ##### public function crop()
-Crops image to dimensions specified in `thumbnailParams`.  Please also see http://image.intervention.io/api/crop.
-##### public function fit()
-Resizes and crops image to dimensions specified in `thumbnailParams`.  Please also see http://image.intervention.io/api/fit.
+Resize the image to fill the height and width the container, maintaining the aspect ratio and cropping the image as needed.  The image can be optionally positioned (see `config.json`, `supportedActions` for options).  Please also see http://image.intervention.io/api/fit and https://css-tricks.com/almanac/properties/o/object-fit/.
 ##### public function extractThumbnailParams($thumbnailUrlPath)
 Extracts dimensions, action, and qualtiy from url.
 >**(string) $thumbnailUrlPath** - The (relative) url to the thumbnail. In the example 'http://directus.example.com/thumbnail/200/300/crop/best/original-file-name.jpg', the path would be `200/300/crop/best/original-file-name.jpg`
-
 ##### public function translateQuality($qualityText)
 Converts a textual quality, i.e - good, to a number used by the crop/fit functions.
->**(string) $qulityText** - Text to be translated to a quality number, i.e - 'good' = 50, 'best' = 100
-##### public function getAcceptableFileExtensions()
-Returns acceptable file extensions as defined in `config.json`.
-##### public function isAcceptableThumbnailDimension($width, $height)
+>**(string) $qualityText** - Text to be translated to a quality number, i.e - 'good' = 50, 'best' = 100
+##### public function isSupportedFileExtension($ext)
+>**(string) $ext** - File extension.
+##### public function getSupportedFileExtensions()
+Returns supported file extensions as defined in `config.json`.
+##### public function isSuppportedThumbnailDimension($width, $height)
 Checks if width and height combination is acceptable, as defined in `config.json`.
 >**(int) $width** - Width of requested thumbnail.
 
 >**(int) $height** - Height of requested thumbnail.
-##### public function getAcceptableThumbnailDimensions()
+##### public function getSupportedThumbnailDimensions()
 Returns acceptable dimensions, as defined in `config.json`
+##### public function isSupportedAction($action)
+>**(string) $action** - Action - `crop` or `contain`.
+##### public function getSupportedActions()
+Returns supported actions as defined in `config.json`.
+##### public function isSupportedQualityTag($qualityTag)
+>**(string) $action** - Quality tag, i.e - `best`, `good`.
+##### public function getSupportedQualityTags()
+Returns supported quality tags as defined in `config.json`.
+##### public function getSupportedActionOptions()
+Returns supported action options as defined in `config.json`.
 ##### public function getConfig()
 Returns thumbnailer config merged with Directus file config.
 
