@@ -13,7 +13,7 @@ The Directus Thumbnailer is a dynamic image thumbnailing system used by the Dire
 ## Installation & Config
 The thumbnailer utilizes Intervention/Image (http://image.intervention.io/) for thumbnail processing.  To get started:
 - Install Intervention/Image in the Directus root by running  `composer require intervention/image` 
-- Clone the thumbnailer in the Directus root by running `git clone git@github.com:directus/directus-thumbnailer.git`
+- Clone the thumbnailer in the Directus root by running `git clone git@github.com:directus/thumbnailer.git`
 - Modify settings as needed in. `config.json`
 
 ## Examples
